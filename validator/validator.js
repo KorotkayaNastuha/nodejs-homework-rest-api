@@ -4,11 +4,10 @@ const contactSchema = Joi.object({
     name: Joi.string().required(),
     email: Joi.string().required(),
     phone: Joi.string().required(),
+    favorite: Joi.boolean(),
 })
+const updateFavoriteSchema = Joi.object({
+    favorite: Joi.boolean().required(),
+  })
 
-// const validator = schema => body => {
-//   return schema.validate({ body }) 
-// } 
-// const contactValidator = validator(contactSchema)
-
-module.exports = { contactSchema }
+module.exports = { contactSchema, updateFavoriteSchema }
