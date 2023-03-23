@@ -5,11 +5,13 @@ const deleteContact = require('./contacts/deleteContact')
 const updateContact = require('./contacts/updateContact')
 const updateStatusContact = require('./contacts/updateStatusContact')
 
+
 module.exports = {
     getContacts,
     getContactById,
     postContact,
     deleteContact,
     updateContact,
-    updateStatusContact
+    updateStatusContact,
+   
 }
