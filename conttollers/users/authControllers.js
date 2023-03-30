@@ -1,6 +1,11 @@
 const jwt = require('jsonwebtoken')
+const gravatar = require("gravatar");
 
 const User = require("../../models/user");
+const path = require("path");
+const fs = require("fs/promises");
+const Jimp = require("jimp");
+
 const { registerSchema, loginSchema } = require("../../validator/validator");
 
 const { JWT_SECRET, JWT_EXPIRES } = process.env
@@ -22,8 +27,11 @@ const registerUser = async (req, res, next) => {
         if (data) {
             res.status(409).json({ message: "User with this email already exists..." })
         }
+        const avatarURL = gravatar.url(email, { d: 'monsterid' });
+        // const avatarURL = gravatar.url(email);
         const newUser = await User.create({
-            ...req.body
+            ...req.body,
+            avatarURL,
         })
         newUser.password = undefined;
 
@@ -32,6 +40,7 @@ const registerUser = async (req, res, next) => {
         res.status(201).json({
             user: newUser,
             token,
+            avatarURL,
         })
     }
     catch (error) {
@@ -84,5 +93,26 @@ const currentUser = async (req, res) => {
     })
 }
 
-module.exports = { registerUser, loginUser, currentUser, logoutUser }
+const avatarsDir = path.join(__dirname, "../../", "public", "avatars");
+const updateAvatar = async (req, res) => {
+    const { path: tempUpload, originalname } = req.file;
+    const { _id } = req.user
+    
+    try {
+        const avatarName = `${_id}_${originalname}`
+        
+        const resultUpload = path.join(avatarsDir, avatarName)
+        await fs.rename(tempUpload, resultUpload);
+
+        await Jimp.read(resultUpload).then((avatar) => {
+            return avatar.resize(250,250).write(resultUpload)
+        })
+        const avatarURL = path.join("public", "avatars", avatarName);
+        await User.findByIdAndUpdate(_id, { avatarURL });
+        res.json({ avatarURL });
+    } catch (error) {
+        await fs.unlink(tempUpload);
+    }
+}
+module.exports = { registerUser, loginUser, currentUser, logoutUser, updateAvatar }
 
