@@ -5,10 +5,15 @@ const User = require("../../models/user");
 const path = require("path");
 const fs = require("fs/promises");
 const Jimp = require("jimp");
+// const { nanoid } = require('nanoid');
 
-const { registerSchema, loginSchema } = require("../../validator/validator");
+const { v4: uuidv4 } = require('uuid');
+
+const { registerSchema, loginSchema, verifySchemaEmail } = require("../../validator/validator");
 
 const { JWT_SECRET, JWT_EXPIRES } = process.env
+
+const {sendEmail}  = require("../../helpers/email");
 
 const signToken = (id) => 
     jwt.sign({ id }, JWT_SECRET, {
@@ -29,24 +34,70 @@ const registerUser = async (req, res, next) => {
         }
         const avatarURL = gravatar.url(email, { d: 'monsterid' });
         // const avatarURL = gravatar.url(email);
+
+        const verificationToken = uuidv4();
+
         const newUser = await User.create({
             ...req.body,
             avatarURL,
+            verificationToken
         })
         newUser.password = undefined;
 
         const token = signToken(newUser.id);
 
+        const mail = {
+            to: email,
+            subject: "Submit your email",
+            html:`<a href="http://localhost:3000/api/users/verify/${verificationToken}" target="_blank">Submit your email</a>`
+        }
+
+        await sendEmail(mail)
+
         res.status(201).json({
             user: newUser,
             token,
             avatarURL,
+            verificationToken
         })
     }
     catch (error) {
         next(error)
     }
 }
+
+const verifyEmail = async (req, res) => {
+    const { verificationToken } = req.params;
+    const user = await User.findOne({ verificationToken });
+    if (!user) {
+        res.status(404).json({ message: "Not Found'" })
+    }
+    await User.findByIdAndUpdate(user.id, { verify: true, verificationToken: "" });
+
+    res.status(200).json({ message: "Verification successful" });
+}
+
+const verifyRepeatEmail = async (req, res, next) => {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    // const { verificationToken } = user;
+
+    const { error } = verifySchemaEmail.validate(req.body)
+    if (error) {
+        return res.status(400).json({ message: "Missing required field email"});
+    }
+    if (user.verify) {
+        return res.status(400).json({ message: "Verification has already been passed"});
+    }
+    const mail = {
+        to: email,
+        subject: "Email submission",
+        html: `<a target="_blank" href="http://localhost:3000/api/users/verify/${verificationToken}">Submit email</a>`,
+    };
+
+    await sendEmail(mail);
+    res.status(200).json({ message: "Verification email sent" });
+};
 
 const loginUser = async (req, res, next) => {
     try {
@@ -64,7 +115,11 @@ const loginUser = async (req, res, next) => {
         if (!passwordIsValid) {
             res.status(401).json({ message: "Not authorized..." });
         }
+        
         user.password = undefined;
+        // if (!user.verify) {
+        //     res.status(400).json({ message: "Email is wrong or not verify" });
+        // }
 
         const token = signToken(user.id);
         await User.findByIdAndUpdate(user.id, { token })
@@ -114,5 +169,5 @@ const updateAvatar = async (req, res) => {
         await fs.unlink(tempUpload);
     }
 }
-module.exports = { registerUser, loginUser, currentUser, logoutUser, updateAvatar }
+module.exports = { registerUser, loginUser, currentUser, logoutUser, updateAvatar, verifyEmail, verifyRepeatEmail }
 
